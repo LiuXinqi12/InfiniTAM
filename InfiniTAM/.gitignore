@@ -1,0 +1,19 @@
+#CMake in-source build stuff
+
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+
+#Eclipse CDT generated project files
+.cproject
+.project
+
+#Clion generated files
+cmake-build-debug
+cmake-build-release
+.idea
