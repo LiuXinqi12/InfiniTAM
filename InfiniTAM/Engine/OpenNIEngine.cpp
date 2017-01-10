@@ -2,6 +2,8 @@
 
 #include "OpenNIEngine.h"
 
+#include <Config.h>
+
 #include "../Utils/FileUtils.h"
 
 #include <cstdio>

@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include "../Utils/ITMLibDefines.h"
+#include "../Utils/ITMLibDefines.h" //Includes <Config.h>
 #ifndef COMPILE_WITHOUT_CUDA
 #include "../../ORUtils/CUDADefines.h"
 #endif

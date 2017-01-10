@@ -1,35 +1,6 @@
 include_directories(${OPENGL_INCLUDE_DIR})
 include_directories(${GLUT_INCLUDE_DIR})
 
-IF(WITH_CUDA)
-  include_directories(${CUDA_INCLUDE_DIRS})
-ELSE()
-  add_definitions(-DCOMPILE_WITHOUT_CUDA)
-ENDIF()
-
-IF(OPENNI_FOUND)
-  include_directories(${OpenNI_INCLUDE_DIR})
-ELSE(OPENNI_FOUND)
-  add_definitions(-DCOMPILE_WITHOUT_OpenNI)
-ENDIF(OPENNI_FOUND)
-
-IF(MSKINECTAPI_FOUND)
-  include_directories(${MSKINECTAPI_INCLUDE_DIR})
-ELSE(MSKINECTAPI_FOUND)
-  add_definitions(-DCOMPILE_WITHOUT_Kinect2)
-ENDIF(MSKINECTAPI_FOUND)
-
-IF(DEFINED libuvc_INCLUDE_DIRS)
-  include_directories(${libuvc_INCLUDE_DIRS})
-  add_definitions(-DCOMPILE_WITH_LibUVC)
-ENDIF()
-
-IF(WITH_REALSENSE)
-  include_directories(${RealSense_INCLUDE_DIR})
-  add_definitions(-DCOMPILE_WITH_RealSense)
-  SET_PROPERTY(SOURCE RealSenseEngine.cpp PROPERTY COMPILE_FLAGS -std=c++11)
-ENDIF()
-
 add_library(Engine
 ImageSourceEngine.cpp
 ImageSourceEngine.h

@@ -1,6 +1,7 @@
 // Copyright 2014-2015 Isis Innovation Limited and the authors of InfiniTAM
 
 #include "InfiniTAMApp.h"
+#include <Config.h>
 #include "../../Engine/OpenNIEngine.h"
 #include "../../Engine/IMUSourceEngine.h"
 

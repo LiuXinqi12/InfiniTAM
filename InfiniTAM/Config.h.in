@@ -1,0 +1,8 @@
+#pragma once
+
+#cmakedefine COMPILE_WITHOUT_CUDA
+#cmakedefine COMPILE_WITHOUT_OpenNI
+#cmakedefine COMPILE_WITHOUT_Kinect2
+#cmakedefine COMPILE_WITH_LibUVC
+#cmakedefine COMPILE_WITH_RealSense
+#cmakedefine COMPILE_WITH_DSSDK

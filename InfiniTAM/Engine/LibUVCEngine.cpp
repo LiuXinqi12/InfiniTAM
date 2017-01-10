@@ -1,7 +1,7 @@
 // Copyright 2014-2015 Isis Innovation Limited and the authors of InfiniTAM
 
 #include "LibUVCEngine.h"
-
+#include <Config.h>
 using namespace InfiniTAM::Engine;
 
 #ifdef COMPILE_WITH_LibUVC

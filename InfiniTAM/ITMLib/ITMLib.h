@@ -3,6 +3,8 @@
 #ifndef __InfiniTAM_LIB__
 #define __InfiniTAM_LIB__
 
+#include <Config.h>
+
 #include "Utils/ITMLibDefines.h"
 
 #include "Objects/ITMScene.h"

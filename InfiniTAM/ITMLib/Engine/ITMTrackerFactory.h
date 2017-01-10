@@ -5,6 +5,8 @@
 #include <map>
 #include <stdexcept>
 
+#include <Config.h>
+
 #include "ITMCompositeTracker.h"
 #include "ITMIMUTracker.h"
 #include "ITMLowLevelEngine.h"

@@ -6,7 +6,8 @@
 
 #include <stdlib.h>
 
-#include "../Utils/ITMLibDefines.h"
+
+#include "../Utils/ITMLibDefines.h" //includes <Config.h>
 #include "../../ORUtils/Image.h"
 
 namespace ITMLib

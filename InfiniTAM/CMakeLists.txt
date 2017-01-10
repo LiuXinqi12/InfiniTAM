@@ -30,6 +30,10 @@ find_package(RealSense QUIET)
 CANONIFY_BOOL(REALSENSE_FOUND)
 message(STATUS "librealsense found: ${REALSENSE_FOUND}")
 
+find_package(DSSDK QUIET)
+CANONIFY_BOOL(DSSDK_FOUND)
+message(STATUS "libDepthSense found: ${DSSDK_FOUND}")
+
 find_package(PNG QUIET)
 CANONIFY_BOOL(PNG_FOUND)
 message(STATUS "libpng found: ${PNG_FOUND}")
@@ -37,6 +41,7 @@ message(STATUS "libpng found: ${PNG_FOUND}")
 OPTION(WITH_CUDA "Build with CUDA support?" ${CUDA_FOUND})
 INCLUDE(${PROJECT_SOURCE_DIR}/cmake/UseOpenMP.cmake)
 OPTION(WITH_REALSENSE "Build with Intel RealSense support?" ${REALSENSE_FOUND})
+OPTION(WITH_DSSDK "Build with SoftKinetic DepthSense support?" ${DSSDK_FOUND})
 
 IF(MSVC_IDE)
   add_definitions(-D_CRT_SECURE_NO_WARNINGS)
@@ -55,6 +60,48 @@ IF("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libstdc++ -Wno-deprecated-declarations -Wno-unused-function")
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -stdlib=libstdc++")
 ENDIF()
+
+
+#======================================= CONFIGURE PREPROCESSOR DEFINES ================================================
+
+IF(WITH_CUDA)
+  include_directories(${CUDA_INCLUDE_DIRS})
+ELSE()
+  set(COMPILE_WITHOUT_CUDA TRUE)
+ENDIF()
+
+IF(OPENNI_FOUND)
+  include_directories(${OpenNI_INCLUDE_DIR})
+ELSE(OPENNI_FOUND)
+  set(COMPILE_WITHOUT_OpenNI TRUE)
+ENDIF(OPENNI_FOUND)
+
+IF(MSKINECTAPI_FOUND)
+  include_directories(${MSKINECTAPI_INCLUDE_DIR})
+ELSE(MSKINECTAPI_FOUND)
+  set(COMPILE_WITHOUT_Kinect2 TRUE)
+ENDIF(MSKINECTAPI_FOUND)
+
+IF(DEFINED libuvc_INCLUDE_DIRS)
+  include_directories(${libuvc_INCLUDE_DIRS})
+  set(COMPILE_WITH_LibUVC TRUE)
+ENDIF()
+
+IF(WITH_REALSENSE)
+  include_directories(${RealSense_INCLUDE_DIR})
+  set(COMPILE_WITH_RealSense TRUE)
+  SET_PROPERTY(SOURCE RealSenseEngine.cpp PROPERTY COMPILE_FLAGS -std=c++11)
+ENDIF()
+
+IF(WITH_DSSDK)
+  include_directories(${DSSDK_INCLUDE_DIRS})
+  set(COMPILE_WITH_DSSDK TRUE)
+ENDIF()
+
+configure_file(Config.h.in Config.h)
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
+
+#================================= PROCESS SUBDIRECTORIES (ADD LIBRARIES & EXECUTABLE) =================================
 
 add_subdirectory(ORUtils)
 add_subdirectory(ITMLib)

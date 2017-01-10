@@ -12,6 +12,8 @@
 #endif // NDEBUG
 #endif
 
+#include <Config.h>
+
 /// Kinect2 support is disabled by default (to not add the Kinect2 SDK dependency)
 #ifndef COMPILE_WITHOUT_Kinect2
 #define COMPILE_WITHOUT_Kinect2

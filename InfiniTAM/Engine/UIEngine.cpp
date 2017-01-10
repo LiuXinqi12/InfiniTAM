@@ -1,5 +1,6 @@
 // Copyright 2014-2015 Isis Innovation Limited and the authors of InfiniTAM
 
+#include <Config.h>
 #include "UIEngine.h"
 
 #include <string.h>
@@ -18,6 +19,7 @@
 #endif
 
 #include "../Utils/FileUtils.h"
+
 
 using namespace InfiniTAM::Engine;
 UIEngine* UIEngine::instance;
