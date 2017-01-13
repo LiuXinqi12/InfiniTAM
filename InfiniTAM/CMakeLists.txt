@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 2.8)
 project(InfiniTAM)
-
+include(CMakeDependentOption)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 
 macro(CANONIFY_BOOL var)
@@ -38,10 +38,11 @@ find_package(PNG QUIET)
 CANONIFY_BOOL(PNG_FOUND)
 message(STATUS "libpng found: ${PNG_FOUND}")
 
+
 OPTION(WITH_CUDA "Build with CUDA support?" ${CUDA_FOUND})
 INCLUDE(${PROJECT_SOURCE_DIR}/cmake/UseOpenMP.cmake)
 OPTION(WITH_REALSENSE "Build with Intel RealSense support?" ${REALSENSE_FOUND})
-OPTION(WITH_DSSDK "Build with SoftKinetic DepthSense support?" ${DSSDK_FOUND})
+CMAKE_DEPENDENT_OPTION(WITH_DSSDK "Build with SoftKinetic DepthSense support?" ON "${DSSDK_FOUND}" OFF)
 
 IF(MSVC_IDE)
   add_definitions(-D_CRT_SECURE_NO_WARNINGS)
@@ -90,7 +91,6 @@ ENDIF()
 IF(WITH_REALSENSE)
   include_directories(${RealSense_INCLUDE_DIR})
   set(COMPILE_WITH_RealSense TRUE)
-  SET_PROPERTY(SOURCE RealSenseEngine.cpp PROPERTY COMPILE_FLAGS -std=c++11)
 ENDIF()
 
 IF(WITH_DSSDK)

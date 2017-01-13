@@ -9,6 +9,7 @@
 #include "Engine/Kinect2Engine.h"
 #include "Engine/LibUVCEngine.h"
 #include "Engine/RealSenseEngine.h"
+#include "Engine/DepthSenseEngine.h"
 
 using namespace InfiniTAM::Engine;
 
@@ -68,6 +69,15 @@ static void CreateDefaultImageSource(ImageSourceEngine* & imageSource, IMUSource
 		imageSource = new RealSenseEngine(calibFile);
 		if (imageSource->getDepthImageSize().x == 0)
 		{
+			delete imageSource;
+			imageSource = NULL;
+		}
+	}
+	if (imageSource == NULL)
+	{
+		printf("trying DepthSense device\n");
+		imageSource = new DepthSenseEngine(calibFile);
+		if (imageSource->getDepthImageSize().x == 0){
 			delete imageSource;
 			imageSource = NULL;
 		}

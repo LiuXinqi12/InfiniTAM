@@ -36,7 +36,7 @@ class Kinect2Engine::PrivateData {
 Kinect2Engine::Kinect2Engine(const char *calibFilename) : ImageSourceEngine(calibFilename)
 {
 	imageSize_d = Vector2i(512, 424);
-	imageSize_rgb = Vector2i(640, 480);
+	requestedColorResolution = Vector2i(640, 480);
 	
 	data = new PrivateData();
 
@@ -129,7 +129,7 @@ void Kinect2Engine::getImages(ITMUChar4Image *rgbImage, ITMShortImage *rawDepthI
 
 bool Kinect2Engine::hasMoreImages(void) { return true; }
 Vector2i Kinect2Engine::getDepthImageSize(void) { return imageSize_d; }
-Vector2i Kinect2Engine::getRGBImageSize(void) { return imageSize_rgb; }
+Vector2i Kinect2Engine::getRGBImageSize(void) { return requestedColorResolution; }
 
 #else
 

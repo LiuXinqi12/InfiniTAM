@@ -187,7 +187,7 @@ LibUVCEngine::LibUVCEngine(const char *calibFilename, Vector2i requested_imageSi
 	// default values to be returned if nothing else works
 	this->calib.disparityCalib.type = ITMDisparityCalib::TRAFO_AFFINE;
 	this->calib.disparityCalib.params = Vector2f(1.0f/1000.0f, 0.0f);
-	this->imageSize_rgb = Vector2i(0,0);
+	this->requestedColorResolution = Vector2i(0,0);
 	this->imageSize_d = Vector2i(0,0);
 
 	data = new PrivateData();
@@ -319,7 +319,7 @@ LibUVCEngine::LibUVCEngine(const char *calibFilename, Vector2i requested_imageSi
 //		uvc_print_diag(data->devh_rgb, NULL);
 
 		if (format_rgb.frame_desc != NULL) {
-			this->imageSize_rgb = Vector2i(format_rgb.frame_desc->wWidth, format_rgb.frame_desc->wHeight);
+			this->requestedColorResolution = Vector2i(format_rgb.frame_desc->wWidth, format_rgb.frame_desc->wHeight);
 		}
 		this->imageSize_d = Vector2i(format_d.frame_desc->wWidth, format_d.frame_desc->wHeight);
 	} while (false);
@@ -375,7 +375,7 @@ void LibUVCEngine::getImages(ITMUChar4Image *rgbImage, ITMShortImage *rawDepthIm
 
 bool LibUVCEngine::hasMoreImages(void) { return true; }
 Vector2i LibUVCEngine::getDepthImageSize(void) { return imageSize_d; }
-Vector2i LibUVCEngine::getRGBImageSize(void) { return imageSize_rgb; }
+Vector2i LibUVCEngine::getRGBImageSize(void) { return requestedColorResolution; }
 
 #else
 

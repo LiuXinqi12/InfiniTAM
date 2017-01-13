@@ -18,6 +18,8 @@ CLIEngine.cpp
 CLIEngine.h
 RealSenseEngine.cpp
 RealSenseEngine.h
+        DepthSenseEngine.cpp
+        DepthSenseEngine.h
 )
 
 target_link_libraries(Engine ${GLUT_LIBRARIES})
@@ -34,5 +36,9 @@ IF(DEFINED libuvc_LIBRARIES)
 ENDIF()
 IF(WITH_REALSENSE)
   TARGET_LINK_LIBRARIES(Engine ${RealSense_LIBRARY})
+  SET_PROPERTY(SOURCE RealSenseEngine.cpp PROPERTY COMPILE_FLAGS -std=c++11)
 ENDIF()
-
+IF(WITH_DSSDK)
+  TARGET_LINK_LIBRARIES(Engine ${DSSDK_LIBRARIES})
+  SET_PROPERTY(SOURCE DepthSenseEngine.cpp PROPERTY COMPILE_FLAGS -std=c++11)
+ENDIF()
