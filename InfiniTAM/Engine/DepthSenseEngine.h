@@ -20,8 +20,10 @@ namespace InfiniTAM {
 	namespace Engine {
 		class DepthSenseEngine : public ImageSourceEngine {
 		private:
-			class PrivateData;
-			PrivateData* data;
+			class Grabber;
+			class Manager;
+			Manager* manager;
+			Vector2i colorResolution, depthResolution;
 		public:
 			DepthSenseEngine(const char *calibFilename, const char *deviceURI = NULL, const bool useInternalCalibration = true,
 			             Vector2i requested_imageSize_rgb = Vector2i(1280, 720), Vector2i requested_imageSize_d = Vector2i(320, 240));

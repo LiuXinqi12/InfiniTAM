@@ -27,184 +27,59 @@
 using namespace InfiniTAM::Engine;
 using namespace DepthSense;
 
-//TODO: use for debugging
-//static int getThreadId(){
-//	std::stringstream ss;
-//	ss << std::this_thread::get_id();
-//	uint64_t id = std::stoull(ss.str());
-//	return id;
-//}
-
-struct CapturedDevice{
+class DepthSenseEngine::Grabber {
+public:
 	DepthSense::Device device;
 	DepthSense::ColorNode colorNode;
 	DepthSense::DepthNode depthNode;
-	CapturedDevice(DepthSense::Device device){
-
-	}
-};
-
-class DepthSenseEngine::PrivateData {
-public:
-
-
-
-	PrivateData(const char *deviceURI, Vector2i requestedColorResolution, Vector2i requestedDepthResolution, int maxQueueSize = 10) :
-			context(DepthSense::Context::create("localhost")),
-			devices(context.getDevices()),
-	        deviceConnected(false),
-			maxQueueSize(maxQueueSize),
-			requestedColorResolution(requestedColorResolution),
-	        requestedDepthResolution(requestedDepthResolution),
-	        confidenceThreshold(50)
-
-	{
-
-
-		if(devices.size() == 0){
-			printf("Warning: failed to connect to DepthSesne device...");
-			return;
-		}
-		deviceConnected = true;
-		if(deviceURI == nullptr){
-			capturedDevice = devices[0];
-		}else{
-			capturedDevice = devices[0];
-			printf("Warning: DS DeviceURI not yet supported...");
-		}
-
-#ifdef WITH_ONLINE_DEVICE_HANDLERS
-		context.deviceAddedEvent().connect(this,&DepthSenseEngine::PrivateData::onDeviceConnected);
-		context.deviceRemovedEvent().connect(this,&DepthSenseEngine::PrivateData::onDeviceDisconnected);
-		capturedDevice.nodeAddedEvent().connect(this, &PrivateData::onNodeConnected);
-		capturedDevice.nodeRemovedEvent().connect(this, &PrivateData::onNodeDisconnected);
-#endif
-		std::vector<Node> nodes = capturedDevice.getNodes();
-
-		printf("Found %u nodes\n", static_cast<unsigned >(nodes.size()));
-		for (Node node: nodes){
-			configureNode(node);
-		}
-		projection.reset(new DepthSense::ProjectionHelper(capturedDevice.getStereoCameraParameters()));
-		thread = new std::thread(&PrivateData::start_helper, this);
-	}
-
-	void start_helper(){
-		context.startNodes();
-		//context.run();
-	}
+	DepthSense::Context context;
+	std::shared_ptr<DepthSense::ProjectionHelper> projection;
+	int colorSize, depthSize;
 
 	static const Vector2i enumeratedResolutions[];
-	static  std::array<Vector2i,14> getEnumeratedResolutions(){
-		return {{ Vector2i(160,120),
-				Vector2i(176,144),
-				Vector2i(240,160),
-				Vector2i(320,240),
-				Vector2i(352,288),
-				Vector2i(480,320),
-				Vector2i(640,480),
-				Vector2i(1280,720),
-				Vector2i(320,120),
-				Vector2i(1024,768),
-				Vector2i(800,600),
-				Vector2i(636,438),
-				Vector2i(640,240),
-				Vector2i(640,360)}};
-	}
 
-
-	/*============================ MEMBER VARIABLES ===============================*/
-	Context context;
-	std::vector<DepthSense::Device> devices;
-	DepthSense::Device capturedDevice;
-
-	bool deviceConnected;
-	DepthNode depthNode;
-	ColorNode colorNode;
-	AudioNode audioNode;
-	std::shared_ptr<DepthSense::ProjectionHelper> projection;
-
-	std::queue<std::vector<uint16_t>> depthQueue;
-	std::vector<uint8_t> colorData;
-	unsigned int maxQueueSize;
-	std::mutex colorMutex;
-	std::mutex depthMutex;
-	std::thread* thread;
-
-	Vector2i requestedColorResolution, requestedDepthResolution;
-	Vector2i colorResolution, depthResolution;
-	int colorSize, depthSize;
-	int confidenceThreshold;
-/*============================ MEMBER METHODS ================================*/
-/*----------------------------------------------------------------------------*/
-	~PrivateData(){
-		context.stopNodes();
-		if (colorNode.isSet()) context.unregisterNode(colorNode);
-		if (depthNode.isSet()) context.unregisterNode(depthNode);
-		if (audioNode.isSet()) context.unregisterNode(audioNode);
-		if(thread != nullptr){
-			if(thread->joinable()){
-				thread->join();
+	Grabber(DepthSense::Device device, DepthSense::Context context):
+			device(device),
+			context(context){
+		std::vector<Node> nodes = device.getNodes();
+		for (Node node: nodes){
+			if (node.is<DepthNode>()){
+				depthNode = node.as<DepthNode>();
+				projection.reset(new DepthSense::ProjectionHelper(device.getStereoCameraParameters()));
+			}
+			if (node.is<ColorNode>()){
+				colorNode = node.as<ColorNode>();
 			}
 		}
-		delete thread;
 	}
-/*----------------------------------------------------------------------------*/
-
-// New color sample event handler
-	void onNewColorSample(ColorNode node, ColorNode::NewSampleReceivedData data)
-	{
-		std::lock_guard<std::mutex> lock(this->colorMutex);
-		memcpy (&colorData[0], data.colorMap, colorData.size ());
-	}
-	/*----------------------------------------------------------------------------*/
-// New depth sample event handler
-	void onNewDepthSample(DepthNode node, DepthNode::NewSampleReceivedData data)
-	{
-		std::lock_guard<std::mutex> lock(this->depthMutex);
-		std::vector<uint16_t> depth_data (depthSize);
-		memcpy(depth_data.data(), &data.depthMap, depthSize * sizeof(uint16_t));
-		for(int i =0; i < depthSize; i++){
-			if(data.confidenceMap[i] < confidenceThreshold){
-				depth_data[i] = 0;
-			}
+	void startDevice(){
+		try{
+			context.registerNode(colorNode);
+			context.registerNode(depthNode);
+			context.startNodes();
+			context.run();
+		}catch(DepthSense::ArgumentException e){
+			printf("Unable to start DepthSense grabber, possibly disconnected.");
 		}
-		while(depthQueue.size() >= maxQueueSize){
-			depthQueue.pop();
-		}
-		depthQueue.push(depth_data);
+
 	}
-
-	void readColor(ITMUChar4Image* rgbImage){
-		std::lock_guard<std::mutex> lock(this->colorMutex);
-		Vector4u *rgb = rgbImage->GetData(MEMORYDEVICE_CPU);
-
-		for (int i = 0, iOrig = 0; i < rgbImage->noDims.x * rgbImage->noDims.y; i++)
-		{
-			Vector4u newPix;
-			newPix.x = colorData[iOrig]; iOrig++;
-			newPix.y = colorData[iOrig]; iOrig++;
-			newPix.z = colorData[iOrig]; iOrig++;
-
-			newPix.w = 255;
-			rgb[i] = newPix;
+	void stopDevice(){
+		try{
+			context.unregisterNode(colorNode);
+			context.unregisterNode(depthNode);
+			if (context.getRegisteredNodes ().size () == 0)
+				context.stopNodes ();
+		}catch(DepthSense::ArgumentException e){
+			printf("Unable to stop DepthSense grabber, possibly disconnected");
 		}
 	}
-
-	void readDepth(ITMShortImage *rawDepthImage){
-		//printf("readDepth entered");
-		std::lock_guard<std::mutex> lock(this->depthMutex);
-		//printf("readDepth past lock");
-		std::vector<uint16_t> depthData = depthQueue.front();
-		short *depth = rawDepthImage->GetData(MEMORYDEVICE_CPU);
-		memcpy(depth, &depthData[0], rawDepthImage->dataSize * sizeof(short));
-	}
-
+/*--------------------------------------------------------------------------------------------------------------------*/
 	template<class NodeType, class ConfigType>
 	void configureNodeHelper(NodeType node, ConfigType config){
 		try{
 			context.requestControl(node,0);
 			node.setConfiguration(config);
+			context.releaseControl(node);
 		}catch (ArgumentException& e)
 		{
 			printf("Argument Exception: %s\n",e.what());
@@ -227,146 +102,214 @@ public:
 		}
 	}
 
-	/*----------------------------------------------------------------------------*/
-	void configureAudioNode()
-	{
-		//we don't need to gather audio samples here, so don't bind new data event
-		AudioNode::Configuration config = audioNode.getConfiguration();
-		config.sampleRate = 44100;
-		configureNodeHelper(audioNode, config);
-		audioNode.setInputMixerLevel(0.5f);
+
+	void reconfigure(){
+		configureDepthNode();
+		configureColorNode();
 	}
 
-/*----------------------------------------------------------------------------*/
+/*--------------------------------------------------------------------------------------------------------------------*/
 	void configureDepthNode()
 	{
-		depthNode.newSampleReceivedEvent().connect(this, &DepthSenseEngine::PrivateData::onNewDepthSample);
+		//TODO pick format and framerate based on requested
 
 		DepthNode::Configuration config = depthNode.getConfiguration();
-
-		//TODO pick format based on requested
-		config.frameFormat = FRAME_FORMAT_QVGA;
-		depthResolution = enumeratedResolutions[config.frameFormat];
-		depthSize = depthResolution.width * depthResolution.height;
-		config.framerate = 25;
-		config.mode = DepthNode::CAMERA_MODE_CLOSE_MODE;
-		config.saturation = true;
-
-		depthNode.setEnableVertices(true);
+		config.frameFormat = DepthSense::FRAME_FORMAT_QVGA;
+		config.framerate = 30;
+		config.mode = DepthSense::DepthNode::CAMERA_MODE_CLOSE_MODE;
+		config.saturation = false;
+		depthNode.setEnableDepthMapFloatingPoint (false);
+		depthNode.setEnableUvMap (true);
+		depthNode.setEnableConfidenceMap (true);
+		depthNode.setEnableDepthMap(true);
 		configureNodeHelper(depthNode, config);
+
+		Vector2i depthResolution = enumeratedResolutions[config.frameFormat];
+		depthSize = depthResolution.width * depthResolution.height * sizeof(uint16_t);
 	}
 
-
-/*----------------------------------------------------------------------------*/
+/*--------------------------------------------------------------------------------------------------------------------*/
 	void configureColorNode()
 	{
-		// connect new color sample handler
-		colorNode.newSampleReceivedEvent().connect(this, &DepthSenseEngine::PrivateData::onNewColorSample);
+		//TODO pick format and framerate based on requested
 		ColorNode::Configuration config = colorNode.getConfiguration();
-		//TODO pick format based on requested
 		config.frameFormat = FRAME_FORMAT_VGA;
-		colorResolution = enumeratedResolutions[config.frameFormat];
-		colorSize = colorResolution.width * colorResolution.height;
-		colorData.resize(colorSize);
 		config.compression = COMPRESSION_TYPE_MJPEG;
 		config.powerLineFrequency = POWER_LINE_FREQUENCY_50HZ;
-		config.framerate = 25;
+		config.framerate = 30;
+		colorNode.setEnableColorMap(true);
 		configureNodeHelper(colorNode, config);
-	}
-/*----------------------------------------------------------------------------*/
-	void configureDevice(DepthSense::Device& device){
+
+		Vector2i colorResolution = enumeratedResolutions[config.frameFormat];
+		colorSize = colorResolution.width * colorResolution.height * 3;//3 channels
 
 	}
+/*--------------------------------------------------------------------------------------------------------------------*/
+};
 
-/*----------------------------------------------------------------------------*/
-	void configureNode(Node node)
+class DepthSenseEngine::Manager {
+public:
+
+
+
+	Manager(const char *deviceURI, Vector2i requestedColorResolution, Vector2i requestedDepthResolution, int maxQueueSize = 10) :
+			context(DepthSense::Context::create("localhost")),
+	        deviceConnected(false),
+			maxQueueSize(maxQueueSize),
+			requestedColorResolution(requestedColorResolution),
+	        requestedDepthResolution(requestedDepthResolution),
+	        confidenceThreshold(50)
+
 	{
+		std::vector<DepthSense::Device> devices = context.getDevices();
 
-		if ((node.is<DepthNode>())&&(!depthNode.isSet()))
-		{
-			depthNode = node.as<DepthNode>();
-			configureDepthNode();
 
-			context.registerNode(node);
+		if(devices.size() == 0){
+			printf("Warning: failed to connect to DepthSesne grabber...");
+			return;
 		}
-		if ((node.is<ColorNode>())&&(!colorNode.isSet()))
-		{
-			colorNode = node.as<ColorNode>();
-			configureColorNode();
-			context.registerNode(node);
-		}
-#ifdef WITH_AUDIO
-		if ((node.is<AudioNode>())&&(!audioNode.isSet()))
-		{
-			audioNode = node.as<AudioNode>();
-			configureAudioNode();
-			context.registerNode(node);
-		}
-#endif
-	}
 
-#ifdef WITH_ONLINE_DEVICE_HANDLERS
-	void onDeviceConnected(Context context, Context::DeviceAddedData data)
-	{
-		if (!deviceConnected)
-		{
-			data.device.nodeAddedEvent().connect(this, &DepthSenseEngine::PrivateData::onNodeConnected);
-			data.device.nodeRemovedEvent().connect(this, &DepthSenseEngine::PrivateData::onNodeDisconnected);
+		if(deviceURI == nullptr){
+			grabber = new Grabber(devices[0], context);
+		}else{
+			grabber = new Grabber(devices[0], context);
+			printf("Warning: DS DeviceURI not yet supported...");
+		}
+		captureDevice(grabber);
+		grabber->reconfigure();
+
+		Vector2i depthResolution = DepthSenseEngine::Grabber::enumeratedResolutions[grabber->depthNode.getConfiguration().frameFormat];
+		colorData.resize(grabber->colorSize);//
+		depthData.resize(depthResolution.width * depthResolution.height);
+		depthSize = grabber->depthSize;
+		if(grabber->depthNode.isSet() && grabber->colorNode.isSet()){
 			deviceConnected = true;
 		}
+
+		thread = new std::thread(&Grabber::startDevice, grabber);
 	}
 
-	void onDeviceDisconnected(Context context, Context::DeviceRemovedData data)
-	{
-		deviceConnected = false;
-		printf("Device disconnected\n");
-	}
 
-		void onNodeConnected(Device device, Device::NodeAddedData data)
-	{
-		configureNode(data.node);
-	}
 
-	/*----------------------------------------------------------------------------*/
-	void onNodeDisconnected(Device device, Device::NodeRemovedData data)
-	{
-		if (data.node.is<AudioNode>() && (data.node.as<AudioNode>() == audioNode))
-			audioNode.unset();
-		if (data.node.is<ColorNode>() && (data.node.as<ColorNode>() == colorNode))
-			colorNode.unset();
-		if (data.node.is<DepthNode>() && (data.node.as<DepthNode>() == depthNode))
-			depthNode.unset();
-		printf("Node disconnected\n");
-	}
+	/*============================ MEMBER VARIABLES ===============================*/
+	Context context;
+	Grabber* grabber;
 
+	bool deviceConnected;
+
+	std::queue<std::vector<uint16_t>> depthQueue;
+	std::vector<uint16_t> depthData;
+	std::vector<uint8_t> colorData;
+
+	int depthSize;
+	unsigned int maxQueueSize;
+	std::mutex colorMutex;
+	std::mutex depthMutex;
+	std::thread* thread;
+
+	Vector2i requestedColorResolution, requestedDepthResolution;
+
+	int confidenceThreshold;
+/*============================ MEMBER METHODS ================================*/
 /*----------------------------------------------------------------------------*/
-#endif
+	~Manager(){
+		grabber->stopDevice();
+		releaseDevice(grabber);
+		if(thread != nullptr){
+			if(thread->joinable()){
+				thread->join();
+			}
+		}
+		delete thread;
+		delete grabber;
+	}
+/*----------------------------------------------------------------------------*/
+
+// New color sample event handler
+	void onNewColorSample(ColorNode node, ColorNode::NewSampleReceivedData data)
+	{
+		std::lock_guard<std::mutex> lock(this->colorMutex);
+		memcpy (&colorData[0], data.colorMap, colorData.size ());
+	}
+	/*----------------------------------------------------------------------------*/
+	void onNewDepthSample(DepthNode node, DepthNode::NewSampleReceivedData data)
+	{
+		std::lock_guard<std::mutex> lock(this->depthMutex);
+		memcpy(depthData.data(), data.depthMap, depthSize);
+		for(unsigned i = 0; i < depthData.size(); i++){
+			if(data.confidenceMap[i] < confidenceThreshold){
+				depthData[i] = 0;
+			}
+		}
+
+	}
+// New depth sample event handler
+	void onNewDepthSampleBuffered(DepthNode node, DepthNode::NewSampleReceivedData data)
+	{
+		std::lock_guard<std::mutex> lock(this->depthMutex);
+		std::vector<uint16_t> depthData (depthSize);
+		memcpy(depthData.data(), data.depthMap, depthSize);
+		for(int i =0; i < depthSize; i++){
+			if(data.confidenceMap[i] < confidenceThreshold){
+				depthData[i] = 0;
+			}
+		}
+		while(depthQueue.size() >= maxQueueSize){
+			depthQueue.pop();
+		}
+		depthQueue.push(depthData);
+	}
+//readers for access to color & depth data from other threads
+	void readColor(ITMUChar4Image* rgbImage){
+		std::lock_guard<std::mutex> lock(this->colorMutex);
+		Vector4u *rgb = rgbImage->GetData(MEMORYDEVICE_CPU);
+		for (int i = 0, iOrig = 0; i < rgbImage->noDims.x * rgbImage->noDims.y; i++)
+		{
+			Vector4u newPix;
+			newPix.x = colorData[iOrig]; iOrig++;
+			newPix.y = colorData[iOrig]; iOrig++;
+			newPix.z = colorData[iOrig]; iOrig++;
+
+			newPix.w = 255;
+			rgb[i] = newPix;
+		}
+	}
+
+	void readDepth(ITMShortImage* rawDepthImage){
+		std::lock_guard<std::mutex> lock(this->depthMutex);
+		short *depth = rawDepthImage->GetData(MEMORYDEVICE_CPU);
+		memcpy(depth, &depthData[0], grabber->depthSize);
+	}
+
+	void readDepthBuffered(ITMShortImage* rawDepthImage){
+
+
+		std::lock_guard<std::mutex> lock(this->depthMutex);
+
+		if(depthQueue.size() > 0 ){
+			std::vector<uint16_t> depthData = depthQueue.front();
+			short *depth = rawDepthImage->GetData(MEMORYDEVICE_CPU);
+			memcpy(depth, &depthData[0], grabber->depthSize);
+		}else{
+			short *depth = rawDepthImage->GetData(MEMORYDEVICE_CPU);
+			memset(depth, 0, grabber->depthSize);
+		}
+	}
+
+	void captureDevice(Grabber* device){
+		device->colorNode.newSampleReceivedEvent().connect(this, &DepthSenseEngine::Manager::onNewColorSample);
+		device->depthNode.newSampleReceivedEvent().connect(this, &DepthSenseEngine::Manager::onNewDepthSample);
+	}
+	void releaseDevice(Grabber* device){
+		device->colorNode.newSampleReceivedEvent().disconnect(this, &DepthSenseEngine::Manager::onNewColorSample);
+		device->depthNode.newSampleReceivedEvent().disconnect(this, &DepthSenseEngine::Manager::onNewDepthSample);
+	}
+
 
 };
 
-
-// // Borrowed for reference from DepthSense API:
-//	enum FrameFormat
-//	{
-//		FRAME_FORMAT_UNKNOWN = 0,/*!< unknown */
-//		FRAME_FORMAT_QQVGA = 1,/*!< QQVGA (160x120) */
-//		FRAME_FORMAT_QCIF = 2,/*!< QCIF (176x144) */
-//		FRAME_FORMAT_HQVGA = 3,/*!< HQVGA (240x160) */
-//		FRAME_FORMAT_QVGA = 4,/*!< QVGA (320x240) */
-//		FRAME_FORMAT_CIF = 5,/*!< CIF (352x288) */
-//		FRAME_FORMAT_HVGA = 6,/*!< HVGA (480x320) */
-//		FRAME_FORMAT_VGA = 7,/*!< VGA (640x480) */
-//		FRAME_FORMAT_WXGA_H = 8,/*!< WXGA_H (1280x720) */
-//		FRAME_FORMAT_DS311 = 9,/*!< DS311 (320x120) */
-//		FRAME_FORMAT_XGA = 10,/*!< XGA (1024x768) */
-//		FRAME_FORMAT_SVGA = 11,/*!< SVGA (800x600) */
-//		FRAME_FORMAT_OVVGA = 12,/*!< OVVGA (636x480) */
-//		FRAME_FORMAT_WHVGA = 13,/*!< WHVGA (640x240) */
-//		FRAME_FORMAT_NHD = 14,/*!< nHD (640x360) */
-//		FRAME_FORMAT_STEREOLR = 15,/*!< StereoLR (320x480) */
-//	};
-//const Vector2i DepthSenseEngine::PrivateData::enumeratedResolutions[];
-const Vector2i DepthSenseEngine::PrivateData::enumeratedResolutions[]  = {
+const Vector2i DepthSenseEngine::Grabber::enumeratedResolutions[]  = {
+	Vector2i(0,0),
 	Vector2i(160,120),
 	Vector2i(176,144),
 	Vector2i(240,160),
@@ -386,54 +329,43 @@ const Vector2i DepthSenseEngine::PrivateData::enumeratedResolutions[]  = {
 
 DepthSenseEngine::DepthSenseEngine(const char *calibFilename, const char *deviceURI, const bool useInternalCalibration,
                    Vector2i requested_imageSize_rgb, Vector2i requested_imageSize_d)
-		: ImageSourceEngine(calibFilename), data(new PrivateData(deviceURI, requested_imageSize_rgb, requested_imageSize_d))
+		:
+		ImageSourceEngine(calibFilename),
+		manager(new Manager(deviceURI, requested_imageSize_rgb, requested_imageSize_d)),
+        colorResolution(0,0),
+        depthResolution(0,0)
 {
-
+	if(manager->deviceConnected){
+		colorResolution = DepthSenseEngine::Grabber::enumeratedResolutions[manager->grabber->colorNode.getConfiguration().frameFormat];
+		depthResolution = DepthSenseEngine::Grabber::enumeratedResolutions[manager->grabber->depthNode.getConfiguration().frameFormat];
+	}
 }
 
 DepthSenseEngine::~DepthSenseEngine() {
-	if(data != nullptr){
-		delete data;
+	if(manager != nullptr){
+		delete manager;
 	}
 }
 
 bool DepthSenseEngine::hasMoreImages(void) {
-	return (data != nullptr && data->depthQueue.size() > 0);
+	return (manager != nullptr && manager->deviceConnected);
 }
 
 Vector2i DepthSenseEngine::getDepthImageSize(void) {
-	if(data->depthNode.isSet()){
-		return DepthSenseEngine::PrivateData::enumeratedResolutions[data->depthNode.getConfiguration().frameFormat];
-		//return DepthSenseEngine::PrivateData::getEnumeratedResolutions()[data->depthNode.getConfiguration().frameFormat];
-	}else{
-		return Vector2i(0,0);
-	}
+	return depthResolution;
 }
 
 Vector2i DepthSenseEngine::getRGBImageSize(void) {
-	if(data->colorNode.isSet()){
-		return DepthSenseEngine::PrivateData::enumeratedResolutions[data->colorNode.getConfiguration().frameFormat];
-		//return DepthSenseEngine::PrivateData::getEnumeratedResolutions()[data->colorNode.getConfiguration().frameFormat];
-	} else{
-
-		return Vector2i(0,0);
-	}
-
+	return colorResolution;
 }
 
 void DepthSenseEngine::getImages(ITMUChar4Image* rgbImage, ITMShortImage* rawDepthImage) {
-	bool colorAvailable = data->colorNode.isSet();
-	bool depthAvailable = data->colorNode.isSet();
-
-	if(colorAvailable){
-		data->readColor(rgbImage);
+	if(manager->deviceConnected){
+		manager->readColor(rgbImage);
+		manager->readDepth(rawDepthImage);
 	}else{
 		Vector4u *rgb = rgbImage->GetData(MEMORYDEVICE_CPU);
 		memset(rgb,0,rgbImage->dataSize * sizeof(Vector4u));
-	}
-	if(depthAvailable){
-		data->readDepth(rawDepthImage);
-	}else{
 		short *depth = rawDepthImage->GetData(MEMORYDEVICE_CPU);
 		memset(depth, 0, rawDepthImage->dataSize * sizeof(short));
 	}
